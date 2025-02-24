@@ -1,11 +1,12 @@
 # PDF to Image AWS Lambda
 
-A serverless AWS Lambda function that converts PDF files to PNG images. The function accepts PDF uploads, converts each page to a PNG image, and stores them in S3. It includes a web interface for easy testing.
+A serverless AWS Lambda function that converts PDF files to PNG images. The function accepts PDF uploads, converts each page to a PNG image, and stores them in S3. It includes a web interface for easy testing and features automatic image deduplication using SHA256 checksums.
 
 ## Features
 
 - Convert PDF files to individual PNG images
-- Store images in S3 with organized structure (`s3://<bucket-name>/pages/<file-id>/page-N.png`)
+- Automatic image deduplication using SHA256 checksums
+- Store images in S3 with content-based paths (`s3://<bucket-name>/pages/<sha256>.png`)
 - Web-based testing interface
 - CORS-enabled for browser access
 - Secure pre-signed URLs for direct S3 uploads
@@ -23,6 +24,7 @@ A serverless AWS Lambda function that converts PDF files to PNG images. The func
 ├── README.md
 ├── template.yaml             # SAM template for AWS resources
 ├── deps
+│   ├── build_layer.sh       # Script to build Lambda layer with Poppler
 │   └── requirements.txt      # Python dependencies
 ├── src
 │   └── app.py               # Lambda function code
@@ -40,6 +42,113 @@ The Lambda function provides these endpoints through its Function URL:
 2. **Process PDF** (`GET /?type=process&fileId=<file-id>`)
    - Converts the uploaded PDF to images
    - Response: `{ "imageUrls": ["...", "..."] }`
+
+## Image Deduplication
+
+The function uses SHA256 checksums to deduplicate images:
+1. Each PDF page is converted to a PNG image
+2. SHA256 checksum is calculated for each image
+3. Images are stored at `pages/<sha256>.png`
+4. If an image with the same checksum already exists, it's reused instead of uploading again
+
+This ensures that:
+- Identical images are stored only once
+- Images can be shared between different PDFs
+- Storage usage is optimized
+- Image URLs are deterministic and content-based
+
+## React Usage Example
+
+Here's how to use the API in a React application:
+
+```jsx
+import { useState } from 'react';
+
+const PdfConverter = () => {
+  const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Replace with your Lambda Function URL
+  const LAMBDA_URL = 'your-lambda-url-here';
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files[0];
+    if (!file || file.type !== 'application/pdf') {
+      setError('Please select a PDF file');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Step 1: Get upload URL
+      const urlResponse = await fetch(`${LAMBDA_URL}?type=get_upload_url`);
+      if (!urlResponse.ok) throw new Error('Failed to get upload URL');
+      const { uploadUrl, fileId } = await urlResponse.json();
+
+      // Step 2: Upload PDF
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': 'application/pdf'
+        }
+      });
+      if (!uploadResponse.ok) throw new Error('Failed to upload PDF');
+
+      // Step 3: Process PDF and get images
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for S3 consistency
+      const processResponse = await fetch(`${LAMBDA_URL}?type=process&fileId=${fileId}`);
+      if (!processResponse.ok) throw new Error('Failed to process PDF');
+      const { imageUrls } = await processResponse.json();
+
+      setImages(imageUrls);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <input
+        type="file"
+        accept=".pdf"
+        onChange={handleFileChange}
+        disabled={loading}
+      />
+      
+      {loading && <div>Converting PDF...</div>}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
+      
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gap: '1rem',
+        padding: '1rem'
+      }}>
+        {images.map((url, index) => (
+          <img
+            key={url}
+            src={url}
+            alt={`Page ${index + 1}`}
+            style={{
+              width: '100%',
+              height: 'auto',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default PdfConverter;
+```
 
 ## Setup and Deployment
 
