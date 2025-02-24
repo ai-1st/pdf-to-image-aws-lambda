@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  PDF-to-Image Lambda function establishes an open endpoint for processing PDF files and returning images
+  and a ZIP archive.
+
+Resources:
+  LambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: pdf-to-image-layer
+      Description: Poppler and other dependencies for the pdf-to-image Lambda function
+      ContentUri: deps/layer/
+      CompatibleRuntimes:
+        - python3.13
+      CompatibleArchitectures:
+        - arm64
+      RetentionPolicy: Delete
+  
+  PdfImageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  PdfImageBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PdfImageBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${PdfImageBucket.Arn}/*'
+
+  LambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      MemorySize: 4096
+      Timeout: 900
+      Architectures:
+        - arm64
+      Layers:
+        - !Ref LambdaLayer
+      Environment:
+        Variables:
+          PYTHONPATH: /opt/python/lib/python3.13/site-packages:/opt
+          LD_LIBRARY_PATH: /opt/lib:/opt
+          PATH: /opt/bin:/usr/local/bin:/usr/bin/:/bin
+          POPPLER_PATH: /opt/bin
+          BUCKET_NAME: !Ref PdfImageBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref PdfImageBucket
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: ['*']
+          AllowMethods: ['GET']
+          AllowHeaders: ['content-type']
+          MaxAge: 300
+
+Outputs:
+  LambdaFunction:
+    Description: "Lambda Function URL"
+    Value: !GetAtt LambdaFunctionUrl.FunctionUrl
+  LambdaFunctionIamRole:
+    Description: "Implicit IAM Role created for Hello World function"
+    Value: !GetAtt LambdaFunctionRole.Arn
+  BucketName:
+    Description: "S3 Bucket Name"
+    Value: !Ref PdfImageBucket
