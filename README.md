@@ -43,13 +43,72 @@ The Lambda function provides these endpoints through its Function URL:
 
 ## Setup and Deployment
 
-1. Install AWS SAM CLI
-2. Clone this repository
-3. Deploy using SAM:
+1. Install prerequisites:
+   - AWS SAM CLI
+   - Docker (for building the Lambda layer)
+   - Git (for cloning the repository)
+
+2. Clone this repository:
+   ```bash
+   git clone https://github.com/ai-1st/pdf-to-image-aws-lambda.git
+   cd pdf-to-image-aws-lambda
+   ```
+
+3. Build the Lambda layer (see [Building the Lambda Layer](#building-the-lambda-layer) section for details):
+   ```bash
+   cd deps
+   chmod +x build_layer.sh
+   ./build_layer.sh
+   cd ..
+   ```
+
+4. Deploy using SAM:
    ```bash
    sam build
    sam deploy --guided
    ```
+
+## Building the Lambda Layer
+
+Before deploying, you need to build the Lambda layer that contains Poppler and other dependencies. The layer is built using Docker to ensure compatibility with the Lambda environment.
+
+### Prerequisites
+- Docker installed and running
+- AWS SAM CLI
+- Bash shell
+
+### Build Steps
+
+1. Navigate to the `deps` directory:
+   ```bash
+   cd deps
+   ```
+
+2. Make the build script executable:
+   ```bash
+   chmod +x build_layer.sh
+   ```
+
+3. Run the build script:
+   ```bash
+   ./build_layer.sh
+   ```
+
+The script will:
+- Create a Docker container based on the AWS Lambda Python 3.13 ARM64 image
+- Install system packages including Poppler and its dependencies
+- Install Python packages from requirements.txt
+- Copy necessary binaries and shared libraries
+- Create a layer directory with the correct structure
+- Clean up temporary files
+
+The resulting layer will be created in the `deps/layer` directory with the following structure:
+```
+layer/
+├── bin/          # Poppler binaries (pdfinfo, pdftoppm, pdftocairo)
+├── lib/          # Shared libraries
+└── python/       # Python packages
+```
 
 ## Testing
 
