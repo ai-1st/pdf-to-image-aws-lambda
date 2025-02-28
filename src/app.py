@@ -6,6 +6,7 @@ import uuid
 import boto3
 import hashlib
 from io import BytesIO
+from PIL import Image
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger()
@@ -86,24 +87,41 @@ def lambda_handler(event, context):
                 # Calculate SHA256 of the image data
                 img_hash = calculate_sha256(img_byte_arr)
                 img_key = f'pages/{img_hash}.png'
+                preview_key = f'pages/{img_hash}-preview.png'
+                
+                # Create preview image
+                preview_size = (300, 300)  # Adjust size as needed
+                preview_img = img.copy()
+                preview_img.thumbnail(preview_size, Image.LANCZOS)
+                preview_byte_arr = BytesIO()
+                preview_img.save(preview_byte_arr, format='PNG')
+                preview_byte_arr = preview_byte_arr.getvalue()
                 
                 try:
-                    # Check if image already exists
+                    # Check if images already exist
+                    images_exist = True
                     try:
                         s3_client.head_object(Bucket=BUCKET_NAME, Key=img_key)
-                        logger.info(f"Image {img_key} already exists, skipping upload")
+                        s3_client.head_object(Bucket=BUCKET_NAME, Key=preview_key)
+                        logger.info(f"Images {img_key} and {preview_key} already exist, skipping upload")
                     except ClientError as e:
                         if e.response['Error']['Code'] == '404':
-                            # Upload only if image doesn't exist
-                            s3_client.put_object(
-                                Bucket=BUCKET_NAME,
-                                Key=img_key,
-                                Body=img_byte_arr,
-                                ContentType='image/png'
-                            )
-                            logger.info(f"Uploaded new image {img_key}")
-                        else:
-                            raise
+                            images_exist = False
+                    
+                    if not images_exist:
+                        # Upload only if images don't exist
+                        s3_client.put_object(
+                            Bucket=BUCKET_NAME,
+                            Key=img_key,
+                            Body=img_byte_arr,
+                            ContentType='image/png'
+                        )
+                        s3_client.put_object(
+                            Bucket=BUCKET_NAME,
+                            Key=preview_key,
+                            Body=preview_byte_arr,
+                            ContentType='image/png'
+                        )
                     
                     # Generate public URL for the image
                     url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{img_key}"
