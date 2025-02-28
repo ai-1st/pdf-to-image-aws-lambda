@@ -7,10 +7,12 @@ Description: >
 Resources:
   LambdaLayer:
     Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: makefile
     Properties:
       LayerName: pdf-to-image-layer
       Description: Poppler and other dependencies for the pdf-to-image Lambda function
-      ContentUri: deps/layer/
+      ContentUri: deps
       CompatibleRuntimes:
         - python3.13
       CompatibleArchitectures:
