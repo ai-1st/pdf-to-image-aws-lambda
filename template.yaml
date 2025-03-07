@@ -22,6 +22,7 @@ Resources:
   PdfImageBucket:
     Type: AWS::S3::Bucket
     Properties:
+      BucketName: cwys-images
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false

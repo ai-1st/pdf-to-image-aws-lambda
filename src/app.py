@@ -5,6 +5,7 @@ import os
 import uuid
 import boto3
 import hashlib
+import base58
 from io import BytesIO
 from PIL import Image
 from botocore.exceptions import ClientError
@@ -20,9 +21,10 @@ def create_response(status_code, body):
         "body": json.dumps(body) if isinstance(body, (dict, list)) else body
     }
 
-def calculate_sha256(data):
-    """Calculate SHA256 hash of binary data."""
-    return hashlib.sha256(data).hexdigest()
+def calculate_file_hash(data):
+    """Calculate MD5 hash of binary data and encode it in base58."""
+    md5_hash = hashlib.md5(data).digest()
+    return base58.b58encode(md5_hash).decode('utf-8')
 
 def generate_presigned_url(object_name, expiration=3600):
     try:
@@ -76,16 +78,16 @@ def lambda_handler(event, context):
                 logger.error(f"Error converting PDF: {e}")
                 return create_response(500, {'error': 'Failed to convert PDF'})
             
-            # Upload each image with SHA256 checksum as filename
+            # Upload each image with MD5+Base58 hash as filename
             image_urls = []
             for img in images:
-                # Convert image to bytes and calculate SHA256
+                # Convert image to bytes and calculate hash
                 img_byte_arr = BytesIO()
                 img.save(img_byte_arr, format='PNG')
                 img_byte_arr = img_byte_arr.getvalue()
                 
-                # Calculate SHA256 of the image data
-                img_hash = calculate_sha256(img_byte_arr)
+                # Calculate MD5 of the image data and encode in base58
+                img_hash = calculate_file_hash(img_byte_arr)
                 img_key = f'pages/{img_hash}.png'
                 preview_key = f'pages/{img_hash}-preview.png'
                 

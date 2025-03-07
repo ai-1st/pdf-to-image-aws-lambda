@@ -2,8 +2,7 @@
 set -e
 
 # Clean up any existing layer directory
-rm -rf layer || true
-rm -f libraries.txt || true
+rm -rf layer python bin lib || true
 
 # Create a temporary Dockerfile for building the layer
 cat > Dockerfile << 'EOF'
@@ -92,7 +91,6 @@ mkdir -p layer
 docker cp temp:/opt/python/. layer/python/
 docker cp temp:/opt/bin/. layer/bin/
 docker cp temp:/opt/lib/. layer/lib/
-docker cp temp:/tmp/libraries.txt .
 
 # Fix permissions
 chmod -R 755 layer
@@ -102,4 +100,3 @@ docker rm temp
 rm Dockerfile
 
 echo "Layer has been built in the layer directory"
-echo "Library list has been saved to libraries.txt"
