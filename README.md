@@ -1,15 +1,17 @@
 # PDF to Image AWS Lambda
 
-A serverless AWS Lambda function that converts PDF files to PNG images. The function accepts PDF uploads, converts each page to a PNG image, and stores them in S3. It includes a web interface for easy testing and features automatic image deduplication using SHA256 checksums.
+A serverless AWS Lambda function that converts PDF files to images. The function accepts PDF uploads, converts each page to an image (JPEG by default), and stores them in S3. It includes a web interface for easy testing and features path-based routing, caching of results, and source IP tagging.
 
 ## Features
 
-- Convert PDF files to individual PNG images
-- Automatic image deduplication using SHA256 checksums
-- Store images in S3 with content-based paths (`s3://<bucket-name>/pages/<sha256>.png`)
+- Convert PDF files to individual images (JPEG by default)
+- Path-based API routing for better organization
+- Caching of conversion results for improved performance
+- Source IP tagging of uploaded images for tracking and analytics
 - Web-based testing interface
 - CORS-enabled for browser access
 - Secure pre-signed URLs for direct S3 uploads
+- Proper error handling and logging
 
 ## Architecture
 
@@ -35,27 +37,22 @@ A serverless AWS Lambda function that converts PDF files to PNG images. The func
 
 The Lambda function provides these endpoints through its Function URL:
 
-1. **Get Upload URL** (`GET /?type=get_upload_url`)
+1. **Get Upload URL** (`GET /upload_url`)
    - Returns a pre-signed URL for uploading PDF to S3
    - Response: `{ "uploadUrl": "...", "fileId": "..." }`
 
-2. **Process PDF** (`GET /?type=process&fileId=<file-id>`)
+2. **Process PDF** (`GET /process/<file-id>`)
    - Converts the uploaded PDF to images
-   - Response: `{ "imageUrls": ["...", "..."] }`
+   - Response: `{ "fileId": "...", "imageUrls": ["...", "..."], "pageCount": N }`
+   - The source IP of the request is automatically tagged to the uploaded images
 
-## Image Deduplication
+## Image Processing and Caching
 
-The function uses SHA256 checksums to deduplicate images:
-1. Each PDF page is converted to a PNG image
-2. SHA256 checksum is calculated for each image
-3. Images are stored at `pages/<sha256>.png`
-4. If an image with the same checksum already exists, it's reused instead of uploading again
-
-This ensures that:
-- Identical images are stored only once
-- Images can be shared between different PDFs
-- Storage usage is optimized
-- Image URLs are deterministic and content-based
+The function processes PDF files and converts them to images:
+1. Each PDF page is converted to a JPEG image by default
+2. Two versions of each image are created: main (full size) and preview (thumbnail)
+3. Results are cached for faster retrieval on subsequent requests
+4. Source IP of the requester is tagged to each uploaded image
 
 ## React Usage Example
 
@@ -66,6 +63,7 @@ import { useState } from 'react';
 
 const PdfConverter = () => {
   const [images, setImages] = useState([]);
+  const [previews, setPreviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -84,7 +82,7 @@ const PdfConverter = () => {
 
     try {
       // Step 1: Get upload URL
-      const urlResponse = await fetch(`${LAMBDA_URL}?type=get_upload_url`);
+      const urlResponse = await fetch(`${LAMBDA_URL}/upload_url`);
       if (!urlResponse.ok) throw new Error('Failed to get upload URL');
       const { uploadUrl, fileId } = await urlResponse.json();
 
@@ -100,11 +98,12 @@ const PdfConverter = () => {
 
       // Step 3: Process PDF and get images
       await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for S3 consistency
-      const processResponse = await fetch(`${LAMBDA_URL}?type=process&fileId=${fileId}`);
+      const processResponse = await fetch(`${LAMBDA_URL}/process/${fileId}`);
       if (!processResponse.ok) throw new Error('Failed to process PDF');
-      const { imageUrls } = await processResponse.json();
+      const { imageUrls, previewUrls } = await processResponse.json();
 
       setImages(imageUrls);
+      setPreviews(previewUrls);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -130,17 +129,18 @@ const PdfConverter = () => {
         gap: '1rem',
         padding: '1rem'
       }}>
-        {images.map((url, index) => (
-          <img
-            key={url}
-            src={url}
-            alt={`Page ${index + 1}`}
-            style={{
-              width: '100%',
-              height: 'auto',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}
-          />
+        {previews.map((url, index) => (
+          <a href={images[index]} target="_blank" rel="noopener noreferrer" key={url}>
+            <img
+              src={url}
+              alt={`Page ${index + 1}`}
+              style={{
+                width: '100%',
+                height: 'auto',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            />
+          </a>
         ))}
       </div>
     </div>

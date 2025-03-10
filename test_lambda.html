@@ -152,8 +152,13 @@
             pdfInput.disabled = show;
         }
         
+        function normalizeUrl(url) {
+            return url.trim().replace(/\/+$/, '');
+        }
+
         lambdaUrlInput.addEventListener('input', () => {
-            const url = lambdaUrlInput.value.trim();
+            const url = normalizeUrl(lambdaUrlInput.value);
+            lambdaUrlInput.value = url; // Update input with normalized URL
             pdfInput.disabled = !url;
             if (url) {
                 localStorage.setItem('lambdaFunctionUrl', url);
@@ -169,7 +174,8 @@
                 
                 // Step 1: Get upload URL
                 showStatus('Getting upload URL...');
-                const urlResponse = await fetch(`${lambdaUrlInput.value}?type=get_upload_url`, {
+                const baseUrl = normalizeUrl(lambdaUrlInput.value);
+                const urlResponse = await fetch(`${baseUrl}/upload_url`, {
                     method: 'GET',
                     mode: 'cors',
                     headers: {
@@ -207,21 +213,20 @@
                     throw new Error(`Failed to upload PDF: ${errorMessage}`);
                 }
                 
-                // Step 3: Process PDF
-                showStatus('Processing PDF...');
-                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for S3 consistency
-                const processResponse = await fetch(`${lambdaUrlInput.value}?type=process&fileId=${fileId}`, {
+                // Step 3: Convert PDF to images
+                showStatus('Converting PDF to images...');
+                const convertResponse = await fetch(`${baseUrl}/process/${fileId}`, {
                     method: 'GET',
                     mode: 'cors',
                     headers: {
                         'Accept': 'application/json'
                     }
                 });
-                if (!processResponse.ok) {
-                    const errorText = await processResponse.text();
-                    throw new Error(`Failed to process PDF: ${errorText}`);
+                if (!convertResponse.ok) {
+                    const errorText = await convertResponse.text();
+                    throw new Error(`Failed to convert PDF: ${errorText}`);
                 }
-                const { imageUrls } = await processResponse.json();
+                const { imageUrls } = await convertResponse.json();
                 
                 // Display images in grid
                 showStatus(`Successfully converted ${imageUrls.length} pages`);
