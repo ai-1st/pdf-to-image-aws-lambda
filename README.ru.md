@@ -38,12 +38,12 @@
 Функция Lambda предоставляет следующие конечные точки через свой Function URL:
 
 1. **Получить URL для загрузки** (`GET /upload_url`)
-   - Возвращает предварительно подписанный URL для загрузки PDF в S3
+   - Возвращает предварительно подписанный URL для загрузки PDF в S3. Клиент должен загрузить PDF по этому URL перед началом процесса конвертации.
    - Ответ: `{ "uploadUrl": "...", "fileId": "..." }`
 
 2. **Обработать PDF** (`GET /process/<file-id>`)
    - Конвертирует загруженный PDF в изображения
-   - Ответ: `{ "fileId": "...", "imageUrls": ["...", "..."], "previewUrls": ["...", "..."], "pageCount": N }`
+   - Ответ: `{ "fileId": "...", "imageUrls": ["...", "..."], "pageCount": N }`
    - Исходный IP-адрес запроса автоматически тегируется к загруженным изображениям
 
 ## Обработка и кэширование изображений
@@ -54,107 +54,6 @@
 3. Результаты кэшируются для более быстрого получения при последующих запросах
 4. Исходный IP-адрес запрашивающего тегируется к каждому загруженному изображению
 
-Это обеспечивает:
-- Конвертация выполняется только один раз для каждого PDF
-- Доступны как полноразмерные изображения, так и превью
-- Отслеживание исходного IP-адреса для аналитики и безопасности
-- Эффективное хранение и получение
-
-## Пример использования в React
-
-Вот как использовать API в приложении React:
-
-```jsx
-import { useState } from 'react';
-
-const PdfConverter = () => {
-  const [images, setImages] = useState([]);
-  const [previews, setPreviews] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Замените на ваш Lambda Function URL
-  const LAMBDA_URL = 'your-lambda-url-here';
-
-  const handleFileChange = async (event) => {
-    const file = event.target.files[0];
-    if (!file || file.type !== 'application/pdf') {
-      setError('Пожалуйста, выберите PDF-файл');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Шаг 1: Получить URL для загрузки
-      const urlResponse = await fetch(`${LAMBDA_URL}/upload_url`);
-      if (!urlResponse.ok) throw new Error('Не удалось получить URL для загрузки');
-      const { uploadUrl, fileId } = await urlResponse.json();
-
-      // Шаг 2: Загрузить PDF
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': 'application/pdf'
-        }
-      });
-      if (!uploadResponse.ok) throw new Error('Не удалось загрузить PDF');
-
-      // Шаг 3: Обработать PDF и получить изображения
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Подождать для согласованности S3
-      const processResponse = await fetch(`${LAMBDA_URL}/process/${fileId}`);
-      if (!processResponse.ok) throw new Error('Не удалось обработать PDF');
-      const { imageUrls, previewUrls } = await processResponse.json();
-
-      setImages(imageUrls);
-      setPreviews(previewUrls);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <input
-        type="file"
-        accept=".pdf"
-        onChange={handleFileChange}
-        disabled={loading}
-      />
-      
-      {loading && <div>Конвертация PDF...</div>}
-      {error && <div style={{ color: 'red' }}>{error}</div>}
-      
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-        gap: '1rem',
-        padding: '1rem'
-      }}>
-        {previews.map((url, index) => (
-          <a href={images[index]} target="_blank" rel="noopener noreferrer" key={url}>
-            <img
-              src={url}
-              alt={`Страница ${index + 1}`}
-              style={{
-                width: '100%',
-                height: 'auto',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-              }}
-            />
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-export default PdfConverter;
-```
 
 ## Настройка и развертывание
 

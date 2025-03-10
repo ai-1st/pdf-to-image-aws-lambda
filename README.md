@@ -38,7 +38,7 @@ A serverless AWS Lambda function that converts PDF files to images. The function
 The Lambda function provides these endpoints through its Function URL:
 
 1. **Get Upload URL** (`GET /upload_url`)
-   - Returns a pre-signed URL for uploading PDF to S3
+   - Returns a pre-signed URL for uploading PDF to S3. The client should upload the PDF to this URL before starting the conversion process.
    - Response: `{ "uploadUrl": "...", "fileId": "..." }`
 
 2. **Process PDF** (`GET /process/<file-id>`)
@@ -53,102 +53,6 @@ The function processes PDF files and converts them to images:
 2. Two versions of each image are created: main (full size) and preview (thumbnail)
 3. Results are cached for faster retrieval on subsequent requests
 4. Source IP of the requester is tagged to each uploaded image
-
-## React Usage Example
-
-Here's how to use the API in a React application:
-
-```jsx
-import { useState } from 'react';
-
-const PdfConverter = () => {
-  const [images, setImages] = useState([]);
-  const [previews, setPreviews] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Replace with your Lambda Function URL
-  const LAMBDA_URL = 'your-lambda-url-here';
-
-  const handleFileChange = async (event) => {
-    const file = event.target.files[0];
-    if (!file || file.type !== 'application/pdf') {
-      setError('Please select a PDF file');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Step 1: Get upload URL
-      const urlResponse = await fetch(`${LAMBDA_URL}/upload_url`);
-      if (!urlResponse.ok) throw new Error('Failed to get upload URL');
-      const { uploadUrl, fileId } = await urlResponse.json();
-
-      // Step 2: Upload PDF
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': 'application/pdf'
-        }
-      });
-      if (!uploadResponse.ok) throw new Error('Failed to upload PDF');
-
-      // Step 3: Process PDF and get images
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for S3 consistency
-      const processResponse = await fetch(`${LAMBDA_URL}/process/${fileId}`);
-      if (!processResponse.ok) throw new Error('Failed to process PDF');
-      const { imageUrls, previewUrls } = await processResponse.json();
-
-      setImages(imageUrls);
-      setPreviews(previewUrls);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div>
-      <input
-        type="file"
-        accept=".pdf"
-        onChange={handleFileChange}
-        disabled={loading}
-      />
-      
-      {loading && <div>Converting PDF...</div>}
-      {error && <div style={{ color: 'red' }}>{error}</div>}
-      
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-        gap: '1rem',
-        padding: '1rem'
-      }}>
-        {previews.map((url, index) => (
-          <a href={images[index]} target="_blank" rel="noopener noreferrer" key={url}>
-            <img
-              src={url}
-              alt={`Page ${index + 1}`}
-              style={{
-                width: '100%',
-                height: 'auto',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-              }}
-            />
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-export default PdfConverter;
-```
 
 ## Setup and Deployment
 
