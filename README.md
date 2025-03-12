@@ -2,6 +2,8 @@
 
 A serverless AWS Lambda function that converts PDF files to images. The function accepts PDF uploads, converts each page to an image (JPEG by default), and stores them in S3. It includes a web interface for easy testing and features path-based routing, caching of results, and source IP tagging.
 
+To see it in action, register at [Chat With My Slides](https://chat-with-my-slides.com) and upload your PDFs.
+
 ## Features
 
 - Convert PDF files to individual images (JPEG by default)
