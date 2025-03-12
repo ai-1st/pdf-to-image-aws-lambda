@@ -20,7 +20,7 @@ BUCKET_NAME = os.environ['BUCKET_NAME']
 # Constants
 TMP_DIR = '/tmp'
 OUTPUT_FOLDER = '/tmp/pages'
-THREAD_COUNT = 10
+THREAD_COUNT = 12
 MAIN_IMAGE_SIZE = 2000
 PREVIEW_IMAGE_SIZE = 300
 
@@ -163,6 +163,7 @@ def convert_pdf_to_images(pdf_path):
             output_folder=OUTPUT_FOLDER,
             fmt="jpeg",  # This is the format we want, but pdf2image might use a different extension such as .jpg
             size=MAIN_IMAGE_SIZE,
+            thread_count=6,
             output_file="page",  # Base filename for output
             paths_only=True     # Return PIL Image objects
         )
